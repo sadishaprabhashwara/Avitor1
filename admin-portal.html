@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Portal — Restricted</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="/socket.io/socket.io.js"></script>
+<style>
+:root{--bg:#04060f;--panel:#080d1a;--card:#0c1220;--b1:#1a2640;--b2:#243050;--blue:#00c8ff;--cyan:#00fff7;--green:#00ff88;--yellow:#ffe600;--red:#ff2d55;--orange:#ff7b35;--purple:#bf5fff;--txt:#ddeeff;--muted:#4a6a8a;--gold:#ffc940}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{height:100%;font-size:13px}
+body{min-height:100%;background:var(--bg);color:var(--txt);font-family:'Rajdhani',sans-serif;overflow-x:hidden;background-image:radial-gradient(ellipse 60% 30% at 50% 0%,rgba(255,107,53,.06) 0%,transparent 60%),repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,100,0,.025) 40px)}
+button{cursor:pointer;border:none;background:none;font-family:inherit}
+input,select,textarea{font-family:'Share Tech Mono',monospace}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:3px;background:var(--b2);outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--orange);box-shadow:0 0 8px var(--orange);cursor:pointer}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;z-index:9999;background:rgba(4,6,15,.97);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.adm-logo{font-family:'Orbitron',monospace;font-weight:900;font-size:1.6rem;letter-spacing:4px;color:var(--orange);text-shadow:0 0 20px rgba(255,107,53,.4)}
+.adm-sub{font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);letter-spacing:3px}
+.login-box{background:var(--card);border:1px solid rgba(255,107,53,.3);border-radius:14px;padding:24px;width:min(340px,90vw);display:flex;flex-direction:column;gap:12px;box-shadow:0 0 40px rgba(255,107,53,.1)}
+.login-in{width:100%;background:rgba(0,0,0,.5);border:1px solid var(--b1);border-radius:8px;color:var(--txt);font-size:.9rem;padding:10px 14px;outline:none;transition:border-color .2s}
+.login-in:focus{border-color:var(--orange)}
+.login-btn{width:100%;padding:12px;border-radius:8px;font-family:'Orbitron',monospace;font-size:.8rem;font-weight:700;letter-spacing:2px;background:linear-gradient(135deg,rgba(255,107,53,.2),rgba(255,107,53,.38));border:1px solid rgba(255,107,53,.5);color:var(--orange);transition:all .2s}
+.login-btn:hover{background:linear-gradient(135deg,rgba(255,107,53,.35),rgba(255,107,53,.55));box-shadow:0 4px 20px rgba(255,107,53,.3)}
+.login-err{font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--red);text-align:center}
+
+/* MAIN LAYOUT */
+#adm-app{display:none;flex-direction:column;min-height:100vh}
+#adm-app.show{display:flex}
+
+/* TOP BAR */
+#adm-hdr{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:54px;background:rgba(4,6,15,.98);border-bottom:1px solid rgba(255,107,53,.2);position:sticky;top:0;z-index:100}
+.adm-logo-sm{font-family:'Orbitron',monospace;font-weight:900;font-size:.95rem;letter-spacing:3px;color:var(--orange)}
+.adm-logo-sm span{color:var(--red)}
+.adm-hdr-r{display:flex;align-items:center;gap:10px}
+.stat-pill{background:rgba(0,0,0,.3);border:1px solid var(--b1);border-radius:6px;padding:4px 10px;font-family:'Share Tech Mono',monospace;font-size:.62rem;white-space:nowrap}
+.stat-pill .sv{color:var(--orange);font-family:'Orbitron',monospace;font-weight:700}
+.logout-btn{padding:5px 12px;border-radius:6px;background:rgba(255,45,85,.1);border:1px solid rgba(255,45,85,.3);color:var(--red);font-family:'Share Tech Mono',monospace;font-size:.65rem;transition:all .15s}
+.logout-btn:hover{background:rgba(255,45,85,.2)}
+
+/* TABS */
+#adm-tabs{display:flex;gap:2px;padding:8px 14px 0;background:rgba(4,6,15,.95);border-bottom:1px solid var(--b1);overflow-x:auto}
+#adm-tabs::-webkit-scrollbar{height:0}
+.at{padding:7px 14px;font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:1px;color:var(--muted);border-bottom:2px solid transparent;transition:all .2s;border-radius:4px 4px 0 0;white-space:nowrap;flex-shrink:0}
+.at.on{color:var(--orange);border-bottom-color:var(--orange);background:rgba(255,107,53,.05)}
+.at:hover:not(.on){color:var(--txt)}
+
+/* CONTENT */
+#adm-content{flex:1;overflow:hidden;min-height:0}
+.apane{display:none;flex:1;overflow-y:auto;padding:16px;flex-direction:column;gap:14px;height:100%}
+.apane.on{display:flex}
+
+/* SECTIONS */
+.asec{background:var(--card);border:1px solid var(--b1);border-radius:12px;overflow:hidden}
+.asec-title{padding:10px 14px;background:rgba(255,107,53,.06);border-bottom:1px solid rgba(255,107,53,.12);font-family:'Orbitron',monospace;font-size:.68rem;font-weight:700;letter-spacing:2px;color:var(--orange);display:flex;align-items:center;justify-content:space-between}
+.asec-body{padding:14px;display:flex;flex-direction:column;gap:10px}
+
+/* STAT GRID */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:600px){.stat-grid{grid-template-columns:1fr 1fr}}
+.sg-card{background:rgba(0,0,0,.35);border:1px solid var(--b1);border-radius:8px;padding:12px;text-align:center}
+.sg-v{font-family:'Orbitron',monospace;font-size:1rem;font-weight:700;color:var(--cyan)}
+.sg-l{font-size:.56rem;color:var(--muted);margin-top:3px;letter-spacing:.8px;font-family:'Share Tech Mono',monospace}
+
+/* TABLE */
+.atbl{width:100%;border-collapse:collapse}
+.atbl th{padding:8px 10px;font-family:'Share Tech Mono',monospace;font-size:.58rem;color:var(--muted);letter-spacing:1px;text-align:left;border-bottom:1px solid var(--b1);position:sticky;top:0;background:var(--card)}
+.atbl td{padding:7px 10px;font-family:'Share Tech Mono',monospace;font-size:.65rem;border-bottom:1px solid rgba(26,45,80,.5)}
+.atbl tr:hover td{background:rgba(255,107,53,.03)}
+.t-green{color:var(--green)}.t-red{color:var(--red)}.t-orange{color:var(--orange)}.t-cyan{color:var(--cyan)}.t-gold{color:var(--gold)}
+.t-badge{font-family:'Orbitron',monospace;font-size:.58rem;font-weight:700}
+
+/* BUTTONS */
+.abtn{padding:6px 12px;border-radius:5px;font-family:'Share Tech Mono',monospace;font-size:.62rem;font-weight:700;transition:all .15s;white-space:nowrap}
+.abtn-o{background:rgba(255,107,53,.12);border:1px solid rgba(255,107,53,.3);color:var(--orange)}
+.abtn-o:hover{background:rgba(255,107,53,.25)}
+.abtn-r{background:rgba(255,45,85,.12);border:1px solid rgba(255,45,85,.3);color:var(--red)}
+.abtn-r:hover{background:rgba(255,45,85,.25)}
+.abtn-g{background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.25);color:var(--green)}
+.abtn-g:hover{background:rgba(0,255,136,.2)}
+.abtn-b{background:rgba(0,200,255,.1);border:1px solid rgba(0,200,255,.25);color:var(--blue)}
+.abtn-b:hover{background:rgba(0,200,255,.2)}
+.abtn-p{background:rgba(191,95,255,.1);border:1px solid rgba(191,95,255,.25);color:var(--purple)}
+.abtn-p:hover{background:rgba(191,95,255,.2)}
+.abtn:disabled{opacity:.35;cursor:not-allowed}
+
+/* INPUTS */
+.ain{background:rgba(0,0,0,.5);border:1px solid var(--b1);border-radius:6px;color:var(--txt);font-family:'Share Tech Mono',monospace;font-size:.78rem;padding:7px 10px;outline:none;transition:border-color .2s;-webkit-appearance:none}
+.ain:focus{border-color:var(--orange)}
+.arow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* SPEED CARDS */
+.spd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+@media(max-width:480px){.spd-grid{grid-template-columns:1fr 1fr}}
+.sc{padding:9px;border-radius:8px;border:1px solid var(--b1);background:rgba(0,0,0,.3);cursor:pointer;text-align:center;transition:all .2s}
+.sc:hover{border-color:rgba(0,200,255,.3);background:rgba(0,200,255,.06)}
+.sc.on{border-color:var(--blue);background:rgba(0,200,255,.1);box-shadow:0 0 14px rgba(0,200,255,.15)}
+.sc-n{font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;color:var(--txt)}
+.sc-l{font-size:.55rem;color:var(--muted);margin-top:3px;font-family:'Share Tech Mono',monospace}
+
+/* PROB BARS */
+.pb-row{background:rgba(0,0,0,.3);border:1px solid var(--b1);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.pb-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.pb-badge{font-family:'Orbitron',monospace;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:4px}
+.pb-pct{font-family:'Orbitron',monospace;font-size:.85rem;font-weight:700;min-width:40px;text-align:right}
+.pb-srow{display:flex;align-items:center;gap:8px}
+.pslider{flex:1;height:5px;border-radius:3px;cursor:pointer;-webkit-appearance:none;appearance:none;outline:none}
+.pslider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;cursor:pointer}
+.pnum{width:48px;background:rgba(0,0,0,.5);border:1px solid var(--b1);border-radius:4px;color:var(--txt);font-family:'Orbitron',monospace;font-size:.7rem;font-weight:700;padding:4px 5px;outline:none;text-align:center;-webkit-appearance:none}
+.pnum:focus{border-color:var(--blue)}
+.prob-bar-track{height:7px;background:var(--b1);border-radius:4px;overflow:hidden;display:flex;gap:1px;margin-top:4px}
+.pbs{height:100%;transition:width .3s}
+.ptotal{font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--muted)}
+.ptotal .pv{font-family:'Orbitron',monospace;font-size:.85rem;font-weight:700}
+.pv.ok{color:var(--green)}.pv.warn{color:var(--yellow)}.pv.over{color:var(--red)}
+
+/* WD items */
+.wd-item{background:rgba(0,0,0,.3);border:1px solid var(--b1);border-radius:8px;padding:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.wd-info{font-family:'Share Tech Mono',monospace;font-size:.65rem}
+.wd-actions{display:flex;gap:5px}
+
+/* User history modal */
+#user-hist-modal{display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:16px}
+#user-hist-modal.show{display:flex}
+.uhm-card{background:var(--card);border:1px solid rgba(0,200,255,.3);border-radius:14px;padding:20px;width:min(560px,100%);max-height:88vh;overflow-y:auto}
+.uhm-title{font-family:'Orbitron',monospace;font-size:.85rem;font-weight:700;letter-spacing:2px;color:var(--blue);margin-bottom:12px}
+.uhm-close{float:right;font-family:'Orbitron',monospace;font-size:.7rem;padding:5px 10px;border-radius:5px;background:rgba(255,45,85,.1);border:1px solid rgba(255,45,85,.3);color:var(--red);transition:all .15s}
+.uhm-close:hover{background:rgba(255,45,85,.2)}
+
+/* Toast */
+#atst{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(12px);padding:10px 18px;border-radius:8px;font-family:'Orbitron',monospace;font-size:.75rem;font-weight:700;letter-spacing:1px;opacity:0;pointer-events:none;transition:all .3s;z-index:9999;white-space:nowrap;max-width:90vw}
+#atst.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#atst.ok{background:rgba(0,255,136,.13);border:1px solid var(--green);color:var(--green)}
+#atst.err{background:rgba(255,45,85,.13);border:1px solid var(--red);color:var(--red)}
+#atst.inf{background:rgba(0,200,255,.13);border:1px solid var(--blue);color:var(--blue)}
+
+@media(max-width:600px){.stat-grid{grid-template-columns:1fr 1fr}.spd-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="adm-logo">⚙ ADMIN PORTAL</div>
+  <div class="adm-sub">RESTRICTED ACCESS — AUTHORIZED ONLY</div>
+  <div class="login-box">
+    <div style="font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--muted);text-align:center;letter-spacing:1px">Enter admin password to continue</div>
+    <input class="login-in" id="psw-in" type="password" placeholder="Admin password…" autocomplete="off">
+    <button class="login-btn" onclick="adminLogin()">🔐 LOGIN</button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="adm-app">
+
+  <!-- TOP BAR -->
+  <div id="adm-hdr">
+    <div class="adm-logo-sm">⚙ ASTRO<span>✕</span>ADMIN</div>
+    <div class="adm-hdr-r">
+      <div class="stat-pill">ONLINE: <span class="sv" id="hdr-online">0</span></div>
+      <div class="stat-pill">PROFIT: <span class="sv" id="hdr-profit">$0</span></div>
+      <div class="stat-pill">ROUND: <span class="sv" id="hdr-round">0</span></div>
+      <div class="stat-pill" id="hdr-phase-pill">PHASE: <span class="sv" id="hdr-phase">—</span></div>
+      <button class="logout-btn" onclick="adminLogout()">LOGOUT</button>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div id="adm-tabs">
+    <button class="at on" onclick="atab('dashboard',this)">📊 DASHBOARD</button>
+    <button class="at" onclick="atab('users',this)">👥 USERS</button>
+    <button class="at" onclick="atab('game',this)">🚀 GAME CTRL</button>
+    <button class="at" onclick="atab('finance',this)">💰 FINANCE</button>
+    <button class="at" onclick="atab('withdrawals',this)">📤 WITHDRAWALS</button>
+    <button class="at" onclick="atab('deposits',this)">📥 DEPOSITS</button>
+  </div>
+
+  <div id="adm-content">
+
+    <!-- DASHBOARD -->
+    <div class="apane on" id="adm-dashboard">
+
+      <div class="asec">
+        <div class="asec-title">📊 LIVE SESSION STATS <button class="abtn abtn-b" onclick="refreshStats()" style="font-size:.58rem;padding:4px 10px">↻ REFRESH</button></div>
+        <div class="asec-body">
+          <div class="stat-grid">
+            <div class="sg-card"><div class="sg-v" id="st-online">0</div><div class="sg-l">ONLINE PLAYERS</div></div>
+            <div class="sg-card"><div class="sg-v" id="st-rounds">0</div><div class="sg-l">TOTAL ROUNDS</div></div>
+            <div class="sg-card"><div class="sg-v" id="st-bets" style="color:var(--yellow)">$0</div><div class="sg-l">TOTAL BETS</div></div>
+            <div class="sg-card"><div class="sg-v" id="st-profit" style="color:var(--orange)">$0</div><div class="sg-l">HOUSE PROFIT</div></div>
+            <div class="sg-card"><div class="sg-v" id="st-dep" style="color:var(--green)">$0</div><div class="sg-l">TOTAL DEPOSITS</div></div>
+            <div class="sg-card"><div class="sg-v" id="st-wd" style="color:var(--red)">$0</div><div class="sg-l">TOTAL WITHDRAWALS</div></div>
+            <div class="sg-card"><div class="sg-v" id="st-mult" style="color:var(--cyan)">1.00×</div><div class="sg-l">CURRENT MULT</div></div>
+            <div class="sg-card"><div class="sg-v" id="st-phase" style="color:var(--purple)">—</div><div class="sg-l">GAME PHASE</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="asec">
+        <div class="asec-title">⚡ QUICK ACTIONS</div>
+        <div class="asec-body">
+          <div class="arow" style="gap:8px;flex-wrap:wrap">
+            <button class="abtn abtn-r" style="padding:10px 18px;font-size:.7rem" onclick="crashNow()">💥 CRASH NOW</button>
+            <button class="abtn abtn-o" style="padding:10px 18px;font-size:.7rem" onclick="instantCrashNext()">⚡ 1.00× NEXT ROUND</button>
+            <button class="abtn abtn-g" style="padding:10px 18px;font-size:.7rem" onclick="toggleKill()">⏸ KILL SWITCH</button>
+            <button class="abtn abtn-p" style="padding:10px 18px;font-size:.7rem" onclick="resetBalances()">🔄 RESET ALL BALANCES</button>
+            <button class="abtn abtn-b" style="padding:10px 18px;font-size:.7rem" onclick="exportCSV()">📊 EXPORT CSV</button>
+          </div>
+          <div class="arow">
+            <span style="font-size:.65rem;color:var(--muted);font-family:'Share Tech Mono',monospace">GLOBAL MESSAGE:</span>
+            <input class="ain" id="gm-in" type="text" placeholder="Broadcast to all players…" style="flex:1">
+            <button class="abtn abtn-o" onclick="sendGlobalMsg()">SEND</button>
+            <button class="abtn abtn-r" onclick="clearGlobalMsg()">CLEAR</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Online users table -->
+      <div class="asec">
+        <div class="asec-title">👥 CURRENTLY ONLINE</div>
+        <div class="asec-body" style="padding:0;overflow-x:auto">
+          <table class="atbl">
+            <thead><tr><th>NAME</th><th>BALANCE</th><th>TOTAL BETS</th><th>WINS</th><th>MAX MULT</th><th>IP</th><th>ACTIONS</th></tr></thead>
+            <tbody id="online-tbl"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /dashboard -->
+
+    <!-- USERS -->
+    <div class="apane" id="adm-users">
+      <div class="asec">
+        <div class="asec-title">👥 ALL USERS <span id="user-count" style="font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--muted)"></span></div>
+        <div class="asec-body" style="padding:0 0 8px">
+          <div class="arow" style="padding:10px 14px">
+            <input class="ain" id="user-search" type="text" placeholder="Search by name…" style="flex:1" oninput="filterUsers()">
+          </div>
+          <div style="overflow-x:auto">
+            <table class="atbl">
+              <thead><tr><th>NAME</th><th>BALANCE</th><th>BETS</th><th>WINS</th><th>MAX MULT</th><th>REFS</th><th>REF EARNED</th><th>STATUS</th><th>ACTIONS</th></tr></thead>
+              <tbody id="all-users-tbl"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GAME CONTROL -->
+    <div class="apane" id="adm-game">
+
+      <div class="asec">
+        <div class="asec-title">🚀 PLANE SPEED</div>
+        <div class="asec-body">
+          <div class="spd-grid">
+            <div class="sc" data-g="0.000035" onclick="setSpeed(this)"><div class="sc-n">🐢 SLOW</div><div class="sc-l">~3min to 2×</div></div>
+            <div class="sc on" data-g="0.00008" onclick="setSpeed(this)"><div class="sc-n">🚀 NORMAL</div><div class="sc-l">~90s to 2×</div></div>
+            <div class="sc" data-g="0.00022" onclick="setSpeed(this)"><div class="sc-n">⚡ FAST</div><div class="sc-l">~30s to 2×</div></div>
+            <div class="sc" data-g="0.00060" onclick="setSpeed(this)"><div class="sc-n">💀 INSANE</div><div class="sc-l">~10s to 2×</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="asec">
+        <div class="asec-title">⚡ FORCE CRASH</div>
+        <div class="asec-body">
+          <button class="abtn abtn-r" style="width:100%;padding:13px;font-size:.8rem;font-family:'Orbitron',monospace;font-weight:700;letter-spacing:2px" onclick="instantCrashNext()">💥 SET NEXT ROUND → INSTANT 1.00×</button>
+          <div class="arow">
+            <input class="ain" id="fc-in" type="number" placeholder="Custom crash (e.g. 3.50)" min="1.00" step="0.01" style="flex:1">
+            <button class="abtn abtn-o" onclick="setForceCrash()">SET NEXT</button>
+            <button class="abtn abtn-g" onclick="clearForce()">CLEAR</button>
+          </div>
+          <div id="fc-status" style="font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--orange);padding:6px 10px;background:rgba(255,107,53,.06);border:1px solid rgba(255,107,53,.2);border-radius:5px;display:none"></div>
+          <div class="arow" style="flex-wrap:wrap;gap:5px">
+            <button class="abtn abtn-r" onclick="fcq(1.00)" style="font-size:.6rem">1×</button>
+            <button class="abtn abtn-o" onclick="fcq(1.50)" style="font-size:.6rem">1.5×</button>
+            <button class="abtn abtn-o" onclick="fcq(2.00)" style="font-size:.6rem">2×</button>
+            <button class="abtn abtn-o" onclick="fcq(3.00)" style="font-size:.6rem">3×</button>
+            <button class="abtn abtn-g" onclick="fcq(5.00)" style="font-size:.6rem">5×</button>
+            <button class="abtn abtn-g" onclick="fcq(10.00)" style="font-size:.6rem">10×</button>
+            <button class="abtn abtn-p" onclick="fcq(25.00)" style="font-size:.6rem">25×</button>
+          </div>
+          <div class="arow">
+            <button class="abtn abtn-r" style="flex:1;padding:10px;font-size:.72rem;font-family:'Orbitron',monospace" onclick="crashNow()">💥 CRASH CURRENT ROUND NOW</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="asec">
+        <div class="asec-title">🎲 PROBABILITY CONTROL</div>
+        <div class="asec-body">
+          <!-- 5 range rows -->
+          <div id="prob-rows" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div class="pb-row">
+            <div class="arow"><span class="ptotal">TOTAL: <span class="pv ok" id="ptotal">100%</span></span><div style="flex:1"></div>
+              <button class="abtn abtn-b" style="font-size:.6rem" onclick="applyPreset('default')">↺ Default</button>
+              <button class="abtn abtn-o" style="font-size:.6rem" onclick="applyPreset('house')">🏦 House</button>
+              <button class="abtn abtn-g" style="font-size:.6rem" onclick="applyPreset('generous')">🎁 Generous</button>
+              <button class="abtn abtn-p" style="font-size:.6rem" onclick="applyPreset('jackpot')">💎 Jackpot</button>
+            </div>
+            <div class="prob-bar-track" id="prob-bar"></div>
+            <button class="abtn abtn-o" style="width:100%;padding:10px;font-size:.72rem;font-family:'Orbitron',monospace;margin-top:4px" onclick="applyProbs()">⚡ APPLY TO SERVER</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="asec">
+        <div class="asec-title">⚙ BET LIMITS & BOTS</div>
+        <div class="asec-body">
+          <div class="arow">
+            <span style="font-size:.65rem;color:var(--muted);font-family:'Share Tech Mono',monospace">MIN BET:</span>
+            <input class="ain" id="min-in" type="number" placeholder="0.10" style="width:80px">
+            <span style="font-size:.65rem;color:var(--muted);font-family:'Share Tech Mono',monospace">MAX BET:</span>
+            <input class="ain" id="max-in" type="number" placeholder="10000" style="width:100px">
+            <button class="abtn abtn-o" onclick="setLimits()">SET</button>
+          </div>
+          <div class="arow">
+            <span style="font-size:.65rem;color:var(--muted);font-family:'Share Tech Mono',monospace">BOT COUNT:</span>
+            <input class="ain" id="bot-in" type="number" value="6" min="0" max="15" style="width:70px">
+            <button class="abtn abtn-b" onclick="setBots()">SET BOTS</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /game -->
+
+    <!-- FINANCE -->
+    <div class="apane" id="adm-finance">
+      <div class="asec">
+        <div class="asec-title">💰 FINANCIAL SUMMARY</div>
+        <div class="asec-body">
+          <div class="stat-grid">
+            <div class="sg-card"><div class="sg-v t-green" id="fin-dep">$0</div><div class="sg-l">TOTAL DEPOSITS</div></div>
+            <div class="sg-card"><div class="sg-v t-red" id="fin-wd">$0</div><div class="sg-l">TOTAL WITHDRAWALS</div></div>
+            <div class="sg-card"><div class="sg-v t-orange" id="fin-profit">$0</div><div class="sg-l">HOUSE PROFIT</div></div>
+            <div class="sg-card"><div class="sg-v t-cyan" id="fin-bets">$0</div><div class="sg-l">TOTAL BETS WAGERED</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="asec">
+        <div class="asec-title">📊 REFERRAL OVERVIEW</div>
+        <div class="asec-body" style="padding:0;overflow-x:auto">
+          <table class="atbl">
+            <thead><tr><th>PLAYER</th><th>REFERRED BY</th><th>REFERRALS MADE</th><th>REF EARNINGS</th></tr></thead>
+            <tbody id="ref-tbl"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- WITHDRAWALS -->
+    <div class="apane" id="adm-withdrawals">
+      <div class="asec">
+        <div class="asec-title">📤 PENDING WITHDRAWAL REQUESTS</div>
+        <div class="asec-body" id="wd-list"><div style="color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.65rem">No pending withdrawals</div></div>
+      </div>
+    </div>
+
+    <!-- DEPOSITS -->
+    <div class="apane" id="adm-deposits">
+      <div class="asec">
+        <div class="asec-title">📥 PENDING DEPOSIT VERIFICATIONS</div>
+        <div class="asec-body" id="dep-list"><div style="color:var(--muted);font-family:'Share Tech Mono',monospace;font-size:.65rem">No pending deposits</div></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<!-- USER HISTORY MODAL -->
+<div id="user-hist-modal">
+  <div class="uhm-card">
+    <button class="uhm-close" onclick="closeHist()">✕ CLOSE</button>
+    <div class="uhm-title">📋 PLAYER HISTORY — <span id="uhm-name" style="color:var(--cyan)"></span></div>
+    <table class="atbl">
+      <thead><tr><th>TYPE</th><th>BET</th><th>MULT</th><th>PROFIT</th><th>RESULT</th><th>DATE</th></tr></thead>
+      <tbody id="uhm-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="atst"></div>
+
+<script>
+/* ══════════════════════════════════════════
+   ASTRO CRASH — Admin Portal Client v3.0
+══════════════════════════════════════════ */
+var socket, authed=false;
+var allUsers=[], adminData=null;
+var probs=[5,50,35,9,1];
+var PROB_COLORS=['var(--red)','var(--orange)','var(--yellow)','var(--blue)','var(--purple)'];
+var PROB_LABELS=['💥 1.00×','📉 1.01–1.5×','📊 1.51–5×','🚀 5–15×','💎 15–30×'];
+
+function el(id){return document.getElementById(id)}
+function fmt(n){return '$'+parseFloat(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtM(n){return parseFloat(n||0).toFixed(2)+'×'}
+var ttmr=null;
+function toast(msg,type,dur){var t=el('atst');t.textContent=msg;t.className='show '+(type||'inf');clearTimeout(ttmr);ttmr=setTimeout(function(){t.className=''},dur||3000)}
+
+// ── CONNECT ──────────────────────────────
+function connect(){
+  socket=io({transports:['websocket']});
+  socket.on('connect',function(){el('login-err').textContent='';});
+  socket.on('disconnect',function(){if(authed)toast('Disconnected!','err');});
+  socket.on('admin_ok',function(d){
+    authed=true;adminData=d;
+    el('login-screen').style.display='none';el('adm-app').classList.add('show');
+    processData(d);buildProbRows();
+    toast('Admin access granted','ok');
+    setInterval(refreshStats,8000);
+  });
+  socket.on('admin_fail',function(){el('login-err').textContent='⚠ Wrong password';});
+  socket.on('admin_ack',function(d){toast(d.msg,'ok');refreshStats();});
+  socket.on('admin_stats',function(d){adminData=d;processData(d);});
+  socket.on('admin_user_history',function(d){showUserHist(d);});
+}
+
+function adminLogin(){
+  var p=el('psw-in').value;
+  if(!p){el('login-err').textContent='Enter password';return}
+  socket.emit('admin_login',{secret:p});
+}
+el('psw-in').addEventListener('keydown',function(e){if(e.key==='Enter')adminLogin()});
+function adminLogout(){authed=false;location.reload()}
+
+function processData(d){
+  // Header
+  el('hdr-online').textContent=d.onlineCount||0;
+  el('hdr-profit').textContent=fmt(d.houseProfit);
+  el('hdr-round').textContent=d.roundNum||0;
+  el('hdr-phase').textContent=(d.phase||'—').toUpperCase();
+  // Dashboard stats
+  el('st-online').textContent=d.onlineCount||0;
+  el('st-rounds').textContent=d.totalRounds||0;
+  el('st-bets').textContent=fmt(d.totalBets);
+  el('st-profit').textContent=fmt(d.houseProfit);
+  el('st-dep').textContent=fmt(d.totalDeposits);
+  el('st-wd').textContent=fmt(d.totalWithdrawals);
+  el('st-mult').textContent=fmtM(d.mult);
+  el('st-phase').textContent=(d.phase||'—').toUpperCase();
+  // Finance
+  el('fin-dep').textContent=fmt(d.totalDeposits);
+  el('fin-wd').textContent=fmt(d.totalWithdrawals);
+  el('fin-profit').textContent=fmt(d.houseProfit);
+  el('fin-bets').textContent=fmt(d.totalBets);
+  // Users
+  allUsers=d.allUsers||[];
+  renderUsersTable(allUsers);
+  renderOnlineTable(d.onlineUsers||[]);
+  renderRefTable(allUsers);
+  // Withdrawals
+  renderWDs(d.pendingWDs||[]);
+  // Deposits
+  renderDeps(d.pendingDeps||[]);
+}
+
+function refreshStats(){if(socket)socket.emit('admin_get_stats')}
+
+// ── USERS ─────────────────────────────────
+function renderUsersTable(users){
+  var b=el('all-users-tbl');if(!b)return;
+  el('user-count').textContent='('+users.length+' users)';
+  b.innerHTML=users.map(function(u){
+    return '<tr><td class="t-cyan">'+u.name+'</td><td class="t-gold">'+fmt(u.balance)+'</td><td>'+fmt(u.totalBets)+'</td><td class="t-green">'+fmt(u.wins)+'</td><td class="t-purple">'+fmtM(u.maxMult)+'</td><td>'+u.refCount+'</td><td class="t-green">'+fmt(u.refEarned)+'</td><td>'+(u.banned?'<span class="t-red t-badge">BANNED</span>':'<span class="t-green t-badge">OK</span>')+'</td><td style="display:flex;gap:4px;flex-wrap:wrap;min-width:220px">'+
+    '<button class="abtn abtn-b" onclick="openBalEdit(\''+u.id+'\',\''+u.name+'\','+u.balance+')">💰 BAL</button>'+
+    '<button class="abtn '+(u.banned?'abtn-g':'abtn-r')+'" onclick="toggleBan(\''+u.id+'\','+u.banned+')">'+(u.banned?'UNBAN':'BAN')+'</button>'+
+    '<button class="abtn abtn-p" onclick="viewUserHist(\''+u.id+'\')">📋 HIST</button>'+
+    '</td></tr>';
+  }).join('');
+}
+function renderOnlineTable(users){
+  var b=el('online-tbl');if(!b)return;
+  b.innerHTML=users.map(function(u){
+    return '<tr><td class="t-green">🟢 '+u.name+'</td><td class="t-gold">'+fmt(u.balance)+'</td><td>'+fmt(u.totalBets)+'</td><td class="t-green">'+fmt(u.wins)+'</td><td class="t-purple">'+fmtM(u.maxMult)+'</td><td style="font-size:.6rem;color:var(--muted)">'+u.ip+'</td><td style="display:flex;gap:4px">'+
+    '<button class="abtn abtn-b" onclick="openBalEdit(\''+u.id+'\',\''+u.name+'\','+u.balance+')">💰</button>'+
+    '<button class="abtn abtn-r" onclick="toggleBan(\''+u.id+'\',false)">BAN</button>'+
+    '</td></tr>';
+  }).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:16px">No online players</td></tr>';
+}
+function filterUsers(){
+  var q=el('user-search').value.toLowerCase();
+  renderUsersTable(allUsers.filter(function(u){return u.name.toLowerCase().includes(q)}));
+}
+
+// ── BALANCE EDITOR ────────────────────────
+var editUID='', editName='';
+function openBalEdit(uid,name,bal){
+  editUID=uid; editName=name;
+  var na=prompt('Edit balance for '+name+'\nCurrent: '+fmt(bal)+'\nEnter new balance:',bal);
+  if(na!==null){var v=parseFloat(na);if(!isNaN(v)&&v>=0)socket.emit('admin_set_balance',{targetId:uid,amount:v});}
+}
+function quickAdj(uid,delta){socket.emit('admin_adj_balance',{targetId:uid,delta})}
+function toggleBan(uid,banned){if(confirm((banned?'Unban':'Ban')+' this user?'))socket.emit('admin_ban',{targetId:uid,ban:!banned})}
+
+// ── USER HISTORY ──────────────────────────
+function viewUserHist(uid){socket.emit('admin_get_user_history',{targetId:uid})}
+function showUserHist(d){
+  el('uhm-name').textContent=d.name;
+  el('uhm-body').innerHTML=(d.txLog||[]).map(function(t,i){
+    return '<tr><td>'+(t.type||'bet').toUpperCase()+'</td><td>'+fmt(t.bet||0)+'</td><td class="'+(t.win?'t-green':'t-red')+'">'+(t.win?fmtM(t.mult):'CRASHED')+'</td><td class="'+(t.profit>=0?'t-green':'t-red')+'">'+(t.profit>=0?'+':'')+fmt(t.profit)+'</td><td class="'+(t.win?'t-green':'t-red')+'">'+(t.win?'WIN':'LOSE')+'</td><td style="font-size:.6rem;color:var(--muted)">'+new Date(t.t).toLocaleString()+'</td></tr>';
+  }).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--muted)">No history</td></tr>';
+  el('user-hist-modal').classList.add('show');
+}
+function closeHist(){el('user-hist-modal').classList.remove('show')}
+
+// ── GAME CONTROL ─────────────────────────
+function crashNow(){if(confirm('CRASH CURRENT ROUND NOW?')){socket.emit('admin_crash_now');toast('Crash triggered!','ok')}}
+function instantCrashNext(){socket.emit('admin_force_crash',{point:1.00});toast('Next round: instant 1.00×','ok');el('fc-status').style.display='block';el('fc-status').textContent='⚡ NEXT ROUND → 1.00× CRASH ARMED';}
+function setForceCrash(){var v=parseFloat(el('fc-in').value);if(isNaN(v)||v<1){toast('Enter value ≥ 1.00','err');return}socket.emit('admin_force_crash',{point:v});el('fc-status').style.display='block';el('fc-status').textContent='⚡ FORCED: '+v.toFixed(2)+'× next round';toast('Force crash: '+v.toFixed(2)+'×','ok')}
+function clearForce(){socket.emit('admin_force_crash',{point:999999});el('fc-status').style.display='none';toast('Force cleared','ok')}
+function fcq(v){el('fc-in').value=v.toFixed(2);setForceCrash()}
+function setSpeed(card){document.querySelectorAll('.sc').forEach(function(c){c.classList.remove('on')});card.classList.add('on');socket.emit('admin_set_speed',{growthBase:parseFloat(card.getAttribute('data-g'))});}
+function toggleKill(){var active=confirm('PAUSE all games?');socket.emit('admin_kill_switch',{active});}
+function resetBalances(){if(confirm('Reset ALL demo balances to $1000?')){socket.emit('admin_reset_balances');toast('All balances reset','ok')}}
+function setLimits(){socket.emit('admin_set_limits',{minBet:parseFloat(el('min-in').value)||0.10,maxBet:parseFloat(el('max-in').value)||10000})}
+function setBots(){socket.emit('admin_set_bots',{count:parseInt(el('bot-in').value)||6});toast('Bot count updated','ok')}
+function sendGlobalMsg(){socket.emit('admin_global_msg',{msg:el('gm-in').value});toast('Message broadcast','ok')}
+function clearGlobalMsg(){socket.emit('admin_global_msg',{msg:''});el('gm-in').value='';toast('Message cleared','ok')}
+
+// ── PROBABILITY ───────────────────────────
+var PRESETS={default:[5,50,35,9,1],house:[15,60,20,4,1],generous:[2,20,40,28,10],jackpot:[2,15,28,35,20]};
+function buildProbRows(){
+  var c=el('prob-rows');if(!c)return;
+  c.innerHTML=probs.map(function(v,i){
+    return '<div class="pb-row"><div class="pb-header"><span class="pb-badge" style="background:'+PROB_COLORS[i]+'22;color:'+PROB_COLORS[i]+';border:1px solid '+PROB_COLORS[i]+'44">'+PROB_LABELS[i]+'</span><span class="pb-pct" id="pp-'+i+'" style="color:'+PROB_COLORS[i]+'">'+v+'%</span></div><div class="pb-srow"><input type="range" class="pslider" id="ps-'+i+'" min="0" max="95" value="'+v+'" style="background:'+PROB_COLORS[i]+'22" oninput="onPS('+i+',this.value)"><input type="number" class="pnum" id="pn-'+i+'" value="'+v+'" min="0" max="95" oninput="onPN('+i+',this.value)"><span style="font-size:.6rem;color:var(--muted)">%</span></div></div>';
+  }).join('');
+  refreshProbBar();
+}
+function onPS(i,v){probs[i]=Math.max(0,Math.min(95,parseInt(v)||0));el('pn-'+i).value=probs[i];el('pp-'+i).textContent=probs[i]+'%';refreshProbBar()}
+function onPN(i,v){probs[i]=Math.max(0,Math.min(95,parseInt(v)||0));el('ps-'+i).value=probs[i];el('pp-'+i).textContent=probs[i]+'%';refreshProbBar()}
+function refreshProbBar(){
+  var total=probs.reduce(function(s,v){return s+v},0);
+  var tv=el('ptotal');if(tv){tv.textContent=total+'%';tv.className='pv '+(total===100?'ok':total>100?'over':'warn')}
+  var pb=el('prob-bar');if(!pb)return;
+  pb.innerHTML=probs.map(function(v,i){var w=total>0?(v/total*100).toFixed(2):0;return '<div class="pbs" style="background:'+PROB_COLORS[i]+';width:'+w+'%;opacity:'+(v===0?'0':'1')+'"></div>';}).join('');
+}
+function applyPreset(name){var p=PRESETS[name];if(!p)return;probs=p.slice();buildProbRows();toast('Preset: '+name,'ok')}
+function applyProbs(){socket.emit('admin_set_probs',{probs});toast('Probabilities applied to server!','ok')}
+
+// ── FINANCE ───────────────────────────────
+function renderRefTable(users){
+  var b=el('ref-tbl');if(!b)return;
+  b.innerHTML=users.filter(function(u){return u.refCount>0||u.refEarned>0}).map(function(u){
+    return '<tr><td class="t-cyan">'+u.name+'</td><td style="color:var(--muted)">—</td><td>'+u.refCount+'</td><td class="t-green">'+fmt(u.refEarned)+'</td></tr>';
+  }).join('')||'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:12px">No referral data yet</td></tr>';
+}
+
+// ── WITHDRAWALS ───────────────────────────
+function renderWDs(wds){
+  var c=el('wd-list');if(!c)return;
+  if(!wds.length){c.innerHTML='<div style="color:var(--muted);font-family:Share Tech Mono,monospace;font-size:.65rem">No pending withdrawals</div>';return}
+  c.innerHTML=wds.map(function(w){
+    return '<div class="wd-item"><div class="wd-info"><div class="t-cyan">'+w.name+'</div><div>'+fmt(w.amount)+' → '+w.network+'</div><div style="font-size:.6rem;color:var(--muted)">'+(w.address||'—').slice(0,20)+'…</div></div><div class="wd-actions"><button class="abtn abtn-g" onclick="approveWD(\''+w.id+'\')">✓ APPROVE</button><button class="abtn abtn-r" onclick="rejectWD(\''+w.id+'\')">✕ REJECT</button></div></div>';
+  }).join('');
+}
+function approveWD(id){if(confirm('Approve this withdrawal?')){socket.emit('admin_approve_wd',{wdId:id});toast('WD approved','ok')}}
+function rejectWD(id){socket.emit('admin_reject_wd',{wdId:id});toast('WD rejected','ok')}
+
+// ── DEPOSITS ──────────────────────────────
+function renderDeps(deps){
+  var c=el('dep-list');if(!c)return;
+  if(!deps.length){c.innerHTML='<div style="color:var(--muted);font-family:Share Tech Mono,monospace;font-size:.65rem">No pending deposits</div>';return}
+  c.innerHTML=deps.map(function(d){
+    return '<div class="wd-item"><div class="wd-info"><div class="t-cyan">'+d.name+'</div><div>'+fmt(d.amount)+'</div><div style="font-size:.6rem;color:var(--muted)">TXID: '+((d.txid||'—').slice(0,20))+'…</div></div><div class="wd-actions"><button class="abtn abtn-g" onclick="approveDep(\''+d.id+'\')">✓ APPROVE</button><button class="abtn abtn-r" onclick="rejectDep(\''+d.id+'\')">✕ REJECT</button></div></div>';
+  }).join('');
+}
+function approveDep(id){if(confirm('Approve this deposit and credit user?')){socket.emit('admin_approve_dep',{depId:id});toast('Deposit approved','ok')}}
+function rejectDep(id){toast('Deposit rejected (server will update)','ok')}
+
+// ── CSV EXPORT ────────────────────────────
+function exportCSV(){
+  var rows=['Name,Balance,TotalBets,Wins,Losses,MaxMult,Referrals,RefEarned,Status'];
+  allUsers.forEach(function(u){rows.push([u.name,u.balance,u.totalBets||0,u.wins||0,u.losses||0,u.maxMult||0,u.refCount||0,u.refEarned||0,u.banned?'BANNED':'ACTIVE'].join(','))});
+  var blob=new Blob([rows.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='astrocrash_report_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
+  toast('CSV exported!','ok');
+}
+
+// ── TABS ──────────────────────────────────
+function atab(name,btn){
+  document.querySelectorAll('.at').forEach(function(b){b.classList.remove('on')});
+  document.querySelectorAll('.apane').forEach(function(p){p.classList.remove('on')});
+  if(btn)btn.classList.add('on');
+  el('adm-'+name).classList.add('on');
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeHist()});
+
+// INIT
+connect();
+</script>
+</body>
+</html>
